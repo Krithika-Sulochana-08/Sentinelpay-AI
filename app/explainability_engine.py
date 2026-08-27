@@ -2,6 +2,7 @@ def generate_explanation(
     transaction,
     risk_result,
     behavior_result,
+    graph_result,
     fusion_result,
     cost_result
 ):
@@ -25,8 +26,24 @@ def generate_explanation(
             "evidence": signal
         })
 
+    # Graph/relationship evidence
+    for signal in graph_result.get("graph_signals", []):
+        evidence.append({
+            "source": "graph_intelligence",
+            "evidence": signal
+        })
+
     # Prioritize strongest evidence
-    top_evidence = evidence[:5]
+    top_evidence = [
+        item for item in evidence
+        if item["evidence"] != "No major risk indicators detected"
+    ][:5]
+
+    if not top_evidence:
+        top_evidence = [{
+            "source": "transaction_risk",
+            "evidence": "No major risk indicators detected"
+        }]
 
     final_decision = fusion_result["final_decision"]
     fused_score = fusion_result["fused_risk_score"]

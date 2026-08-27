@@ -5,6 +5,7 @@ from app.behavior_engine import analyze_behavior
 from app.fusion_engine import fuse_risk_scores
 from app.cost_engine import evaluate_decision_costs
 from app.explainability_engine import generate_explanation
+from app.graph_engine import analyze_graph_risk
 app = FastAPI(
     title="SentinelPay AI",
     description="Explainable AI-powered payment risk intelligence system",
@@ -31,21 +32,29 @@ def health_check():
 def analyze_transaction(transaction: TransactionRequest):
     risk_result = calculate_risk(transaction)
     behavior_result = analyze_behavior(transaction)
+
+    graph_result = analyze_graph_risk(transaction)
+
     fusion_result = fuse_risk_scores(
     risk_result,
-    behavior_result
+    behavior_result,
+    graph_result
 )
+
     cost_result = evaluate_decision_costs(
     transaction,
     fusion_result["fused_risk_score"]
 )
+
     explanation_result = generate_explanation(
     transaction,
     risk_result,
     behavior_result,
+    graph_result,
     fusion_result,
     cost_result
 )
+    
     return {
         "transaction_id": transaction.transaction_id,
         "merchant_id": transaction.merchant_id,
@@ -57,6 +66,10 @@ def analyze_transaction(transaction: TransactionRequest):
         "behavior_status": behavior_result["behavior_status"],
         "amount_deviation_ratio": behavior_result["amount_deviation_ratio"],
         "behavior_signals": behavior_result["behavior_signals"],
+        "graph_risk_score": graph_result["graph_risk_score"],
+        "graph_status": graph_result["graph_status"],
+        "graph_signals": graph_result["graph_signals"],
+        "linked_account_counts": graph_result["linked_account_counts"],
         "fused_risk_score": fusion_result["fused_risk_score"],
         "final_risk_level": fusion_result["final_risk_level"],
         "final_decision": fusion_result["final_decision"],
