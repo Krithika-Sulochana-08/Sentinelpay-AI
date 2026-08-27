@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from app.schemas import TransactionRequest
 from app.risk_engine import calculate_risk
+from app.behavior_engine import analyze_behavior
 app = FastAPI(
     title="SentinelPay AI",
     description="Explainable AI-powered payment risk intelligence system",
@@ -26,12 +27,16 @@ def health_check():
 @app.post("/risk/analyze")
 def analyze_transaction(transaction: TransactionRequest):
     risk_result = calculate_risk(transaction)
-
+    behavior_result = analyze_behavior(transaction)
     return {
         "transaction_id": transaction.transaction_id,
         "merchant_id": transaction.merchant_id,
         "risk_score": risk_result["risk_score"],
         "risk_level": risk_result["risk_level"],
         "decision": risk_result["decision"],
-        "reasons": risk_result["reasons"]
+        "reasons": risk_result["reasons"],
+        "behavior_anomaly_score": behavior_result["behavior_anomaly_score"],
+        "behavior_status": behavior_result["behavior_status"],
+        "amount_deviation_ratio": behavior_result["amount_deviation_ratio"],
+        "behavior_signals": behavior_result["behavior_signals"],
     }
