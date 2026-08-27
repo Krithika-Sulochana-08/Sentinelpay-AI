@@ -6,6 +6,7 @@ from app.fusion_engine import fuse_risk_scores
 from app.cost_engine import evaluate_decision_costs
 from app.explainability_engine import generate_explanation
 from app.graph_engine import analyze_graph_risk
+from app.drift_engine import update_drift_monitor
 app = FastAPI(
     title="SentinelPay AI",
     description="Explainable AI-powered payment risk intelligence system",
@@ -39,6 +40,9 @@ def analyze_transaction(transaction: TransactionRequest):
     risk_result,
     behavior_result,
     graph_result
+)
+    drift_result = update_drift_monitor(
+    fusion_result["fused_risk_score"]
 )
 
     cost_result = evaluate_decision_costs(
@@ -81,4 +85,8 @@ def analyze_transaction(transaction: TransactionRequest):
         "recommended_action": explanation_result["recommended_action"],
         "top_evidence": explanation_result["top_evidence"],
         "explanation_confidence": explanation_result["explanation_confidence"],
+        "drift_status": drift_result["drift_status"],
+        "recent_average_risk": drift_result["recent_average_risk"],
+        "high_risk_ratio": drift_result["high_risk_ratio"],
+        "fraud_spike_detected": drift_result["fraud_spike_detected"],
     }
