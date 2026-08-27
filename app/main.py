@@ -4,7 +4,7 @@ from app.risk_engine import calculate_risk
 from app.behavior_engine import analyze_behavior
 from app.fusion_engine import fuse_risk_scores
 from app.cost_engine import evaluate_decision_costs
-
+from app.explainability_engine import generate_explanation
 app = FastAPI(
     title="SentinelPay AI",
     description="Explainable AI-powered payment risk intelligence system",
@@ -39,6 +39,13 @@ def analyze_transaction(transaction: TransactionRequest):
     transaction,
     fusion_result["fused_risk_score"]
 )
+    explanation_result = generate_explanation(
+    transaction,
+    risk_result,
+    behavior_result,
+    fusion_result,
+    cost_result
+)
     return {
         "transaction_id": transaction.transaction_id,
         "merchant_id": transaction.merchant_id,
@@ -57,4 +64,8 @@ def analyze_transaction(transaction: TransactionRequest):
         "estimated_action_costs": cost_result["estimated_action_costs"],
         "cost_optimized_action": cost_result["cost_optimized_action"],
         "minimum_expected_cost": cost_result["minimum_expected_cost"],
+        "decision_summary": explanation_result["decision_summary"],
+        "recommended_action": explanation_result["recommended_action"],
+        "top_evidence": explanation_result["top_evidence"],
+        "explanation_confidence": explanation_result["explanation_confidence"],
     }
