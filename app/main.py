@@ -9,6 +9,7 @@ from app.confidence_engine import analyze_confidence
 from app.fusion_engine import fuse_risk_scores
 from app.cost_engine import evaluate_decision_costs
 from app.policy_engine import resolve_final_action
+from app.counterfactual_engine import run_counterfactual_analysis
 from app.explainability_engine import generate_explanation
 from app.drift_engine import update_drift_monitor
 
@@ -84,7 +85,12 @@ def analyze_transaction(transaction: TransactionRequest):
         cost_result
     )
 
-    # 10. Explainability
+    # 10. Counterfactual / what-if analysis
+    counterfactual_result = run_counterfactual_analysis(
+        transaction
+    )
+
+    # 11. Explainability
     explanation_result = generate_explanation(
         transaction,
         risk_result,
@@ -96,16 +102,24 @@ def analyze_transaction(transaction: TransactionRequest):
         policy_result
     )
 
-    # 11. API response
+    # 12. API response
     return {
         "transaction_id": transaction.transaction_id,
         "merchant_id": transaction.merchant_id,
 
         # Transaction risk
-        "risk_score": risk_result["risk_score"],
-        "risk_level": risk_result["risk_level"],
-        "decision": risk_result["decision"],
-        "reasons": risk_result["reasons"],
+        "risk_score": risk_result[
+            "risk_score"
+        ],
+        "risk_level": risk_result[
+            "risk_level"
+        ],
+        "decision": risk_result[
+            "decision"
+        ],
+        "reasons": risk_result[
+            "reasons"
+        ],
 
         # Behavioral risk
         "behavior_anomaly_score": behavior_result[
@@ -206,6 +220,14 @@ def analyze_transaction(transaction: TransactionRequest):
         ],
         "policy_resolution_reason": policy_result[
             "policy_resolution_reason"
+        ],
+
+        # Counterfactual analysis
+        "counterfactuals_available": counterfactual_result[
+            "counterfactuals_available"
+        ],
+        "counterfactual_scenarios": counterfactual_result[
+            "counterfactual_scenarios"
         ],
 
         # Explainability
