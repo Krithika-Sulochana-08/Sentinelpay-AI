@@ -74,13 +74,14 @@ def analyze_transaction(transaction: TransactionRequest):
     )
     # 8. Explainability
     explanation_result = generate_explanation(
-        transaction,
-        risk_result,
-        behavior_result,
-        graph_result,
-        merchant_result,
-        fusion_result,
-        cost_result
+    transaction,
+    risk_result,
+    behavior_result,
+    graph_result,
+    merchant_result,
+    fusion_result,
+    cost_result,
+    policy_result
     )
 
     # 9. API response
@@ -128,7 +129,7 @@ def analyze_transaction(transaction: TransactionRequest):
         # Unified risk
         "fused_risk_score": fusion_result["fused_risk_score"],
         "final_risk_level": fusion_result["final_risk_level"],
-        "final_decision": fusion_result["final_decision"],
+        "final_decision":policy_result["authoritative_action"],
         "fusion_components": fusion_result["fusion_components"],
 
         # Cost-aware decisioning

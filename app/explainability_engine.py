@@ -5,7 +5,8 @@ def generate_explanation(
     graph_result,
     merchant_result,
     fusion_result,
-    cost_result
+    cost_result,
+    policy_result
 ):
     """
     Build a concise evidence-based explanation
@@ -57,7 +58,7 @@ def generate_explanation(
             )
         })
 
-    # Remove neutral statements when stronger evidence exists
+    # Remove neutral evidence if stronger evidence exists
     top_evidence = [
         item for item in evidence
         if item["evidence"] != "No major risk indicators detected"
@@ -69,25 +70,33 @@ def generate_explanation(
             "evidence": "No major risk indicators detected"
         }]
 
-    final_decision = fusion_result["final_decision"]
+    # Use authoritative policy action for explanation
+    final_decision = policy_result["authoritative_action"]
+
     fused_score = fusion_result["fused_risk_score"]
 
     if final_decision == "ALLOW":
         summary = (
-            "The transaction is currently assessed as low risk "
+            "The transaction is assessed as low risk "
             "and can be allowed."
         )
 
     elif final_decision == "CHALLENGE":
         summary = (
-            "The transaction shows moderate risk and should "
-            "undergo additional verification."
+            "The transaction requires additional "
+            "customer verification before approval."
+        )
+
+    elif final_decision == "REVIEW":
+        summary = (
+            "The transaction requires manual review "
+            "before approval."
         )
 
     else:
         summary = (
-            "The transaction shows strong risk indicators and "
-            "should be reviewed before approval."
+            "The transaction presents severe risk and "
+            "should be blocked according to the current policy."
         )
 
     # Explanation confidence
@@ -101,8 +110,8 @@ def generate_explanation(
     return {
         "decision_summary": summary,
         "risk_score_explained": fused_score,
-        "recommended_action": cost_result[
-            "cost_optimized_action"
+        "recommended_action": policy_result[
+            "authoritative_action"
         ],
         "top_evidence": top_evidence,
         "explanation_confidence": confidence
