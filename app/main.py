@@ -5,11 +5,13 @@ from app.risk_engine import calculate_risk
 from app.behavior_engine import analyze_behavior
 from app.graph_engine import analyze_graph_risk
 from app.merchant_engine import analyze_merchant_context
+from app.confidence_engine import analyze_confidence
 from app.fusion_engine import fuse_risk_scores
 from app.cost_engine import evaluate_decision_costs
+from app.policy_engine import resolve_final_action
 from app.explainability_engine import generate_explanation
 from app.drift_engine import update_drift_monitor
-from app.policy_engine import resolve_final_action
+
 
 app = FastAPI(
     title="SentinelPay AI",
@@ -49,7 +51,15 @@ def analyze_transaction(transaction: TransactionRequest):
     # 4. Merchant-context analysis
     merchant_result = analyze_merchant_context(transaction)
 
-    # 5. Unified risk fusion
+    # 5. Confidence / uncertainty analysis
+    confidence_result = analyze_confidence(
+        risk_result,
+        behavior_result,
+        graph_result,
+        merchant_result
+    )
+
+    # 6. Unified risk fusion
     fusion_result = fuse_risk_scores(
         risk_result,
         behavior_result,
@@ -57,34 +67,36 @@ def analyze_transaction(transaction: TransactionRequest):
         merchant_result
     )
 
-    # 6. Drift / fraud-spike monitoring
+    # 7. Drift / fraud-spike monitoring
     drift_result = update_drift_monitor(
         fusion_result["fused_risk_score"]
     )
 
-    # 7. Cost-aware decision analysis
+    # 8. Cost-aware decision analysis
     cost_result = evaluate_decision_costs(
         transaction,
         fusion_result["fused_risk_score"]
     )
 
+    # 9. Unified policy resolution
     policy_result = resolve_final_action(
-    fusion_result,
-    cost_result
-    )
-    # 8. Explainability
-    explanation_result = generate_explanation(
-    transaction,
-    risk_result,
-    behavior_result,
-    graph_result,
-    merchant_result,
-    fusion_result,
-    cost_result,
-    policy_result
+        fusion_result,
+        cost_result
     )
 
-    # 9. API response
+    # 10. Explainability
+    explanation_result = generate_explanation(
+        transaction,
+        risk_result,
+        behavior_result,
+        graph_result,
+        merchant_result,
+        fusion_result,
+        cost_result,
+        policy_result
+    )
+
+    # 11. API response
     return {
         "transaction_id": transaction.transaction_id,
         "merchant_id": transaction.merchant_id,
@@ -99,16 +111,26 @@ def analyze_transaction(transaction: TransactionRequest):
         "behavior_anomaly_score": behavior_result[
             "behavior_anomaly_score"
         ],
-        "behavior_status": behavior_result["behavior_status"],
+        "behavior_status": behavior_result[
+            "behavior_status"
+        ],
         "amount_deviation_ratio": behavior_result[
             "amount_deviation_ratio"
         ],
-        "behavior_signals": behavior_result["behavior_signals"],
+        "behavior_signals": behavior_result[
+            "behavior_signals"
+        ],
 
         # Graph intelligence
-        "graph_risk_score": graph_result["graph_risk_score"],
-        "graph_status": graph_result["graph_status"],
-        "graph_signals": graph_result["graph_signals"],
+        "graph_risk_score": graph_result[
+            "graph_risk_score"
+        ],
+        "graph_status": graph_result[
+            "graph_status"
+        ],
+        "graph_signals": graph_result[
+            "graph_signals"
+        ],
         "linked_account_counts": graph_result[
             "linked_account_counts"
         ],
@@ -120,17 +142,46 @@ def analyze_transaction(transaction: TransactionRequest):
         "merchant_context_status": merchant_result[
             "merchant_context_status"
         ],
-        "merchant_category": merchant_result["merchant_category"],
+        "merchant_category": merchant_result[
+            "merchant_category"
+        ],
         "merchant_amount_ratio": merchant_result[
             "merchant_amount_ratio"
         ],
-        "merchant_signals": merchant_result["merchant_signals"],
+        "merchant_signals": merchant_result[
+            "merchant_signals"
+        ],
+
+        # Confidence / uncertainty
+        "decision_confidence": confidence_result[
+            "decision_confidence"
+        ],
+        "uncertainty_score": confidence_result[
+            "uncertainty_score"
+        ],
+        "signal_agreement": confidence_result[
+            "signal_agreement"
+        ],
+        "human_review_recommended": confidence_result[
+            "human_review_recommended"
+        ],
+        "confidence_signal_scores": confidence_result[
+            "signal_scores"
+        ],
 
         # Unified risk
-        "fused_risk_score": fusion_result["fused_risk_score"],
-        "final_risk_level": fusion_result["final_risk_level"],
-        "final_decision":policy_result["authoritative_action"],
-        "fusion_components": fusion_result["fusion_components"],
+        "fused_risk_score": fusion_result[
+            "fused_risk_score"
+        ],
+        "final_risk_level": fusion_result[
+            "final_risk_level"
+        ],
+        "final_decision": policy_result[
+            "authoritative_action"
+        ],
+        "fusion_components": fusion_result[
+            "fusion_components"
+        ],
 
         # Cost-aware decisioning
         "estimated_action_costs": cost_result[
@@ -143,6 +194,7 @@ def analyze_transaction(transaction: TransactionRequest):
             "minimum_expected_cost"
         ],
 
+        # Policy resolution
         "risk_recommended_action": policy_result[
             "risk_recommended_action"
         ],
@@ -163,17 +215,23 @@ def analyze_transaction(transaction: TransactionRequest):
         "recommended_action": explanation_result[
             "recommended_action"
         ],
-        "top_evidence": explanation_result["top_evidence"],
+        "top_evidence": explanation_result[
+            "top_evidence"
+        ],
         "explanation_confidence": explanation_result[
             "explanation_confidence"
         ],
 
         # Drift monitoring
-        "drift_status": drift_result["drift_status"],
+        "drift_status": drift_result[
+            "drift_status"
+        ],
         "recent_average_risk": drift_result[
             "recent_average_risk"
         ],
-        "high_risk_ratio": drift_result["high_risk_ratio"],
+        "high_risk_ratio": drift_result[
+            "high_risk_ratio"
+        ],
         "fraud_spike_detected": drift_result[
             "fraud_spike_detected"
         ]
