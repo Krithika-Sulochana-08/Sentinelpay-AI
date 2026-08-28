@@ -9,7 +9,7 @@ from app.fusion_engine import fuse_risk_scores
 from app.cost_engine import evaluate_decision_costs
 from app.explainability_engine import generate_explanation
 from app.drift_engine import update_drift_monitor
-
+from app.policy_engine import resolve_final_action
 
 app = FastAPI(
     title="SentinelPay AI",
@@ -68,6 +68,10 @@ def analyze_transaction(transaction: TransactionRequest):
         fusion_result["fused_risk_score"]
     )
 
+    policy_result = resolve_final_action(
+    fusion_result,
+    cost_result
+    )
     # 8. Explainability
     explanation_result = generate_explanation(
         transaction,
@@ -136,6 +140,19 @@ def analyze_transaction(transaction: TransactionRequest):
         ],
         "minimum_expected_cost": cost_result[
             "minimum_expected_cost"
+        ],
+
+        "risk_recommended_action": policy_result[
+            "risk_recommended_action"
+        ],
+        "cost_recommended_action": policy_result[
+            "cost_recommended_action"
+        ],
+        "authoritative_action": policy_result[
+            "authoritative_action"
+        ],
+        "policy_resolution_reason": policy_result[
+            "policy_resolution_reason"
         ],
 
         # Explainability
