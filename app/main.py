@@ -22,14 +22,24 @@ from app.feedback_engine import (
     get_feedback_summary,
     get_recent_feedback
 )
-
+from app.ml_engine import (
+    load_ml_model,
+    predict_ml_label
+)
 
 app = FastAPI(
     title="SentinelPay AI",
     description="Explainable AI-powered payment risk intelligence system",
     version="0.1.0"
 )
+@app.on_event("startup")
+def load_persisted_ml_model():
+    result = load_ml_model()
 
+    print(
+        "ML model startup status:",
+        result
+    )
 
 @app.get("/")
 def home():
@@ -68,11 +78,14 @@ def analyze_transaction(
     )
 
     # 4. Merchant-context analysis
-    merchant_result = analyze_merchant_context(
+    merchant_result = analyze_merchant_context(transaction)
+
+    # 5. ML fraud intelligence
+    ml_result = predict_ml_label(
         transaction
     )
 
-    # 5. Confidence / uncertainty analysis
+    # 6. Confidence / uncertainty analysis
     confidence_result = analyze_confidence(
         risk_result,
         behavior_result,
@@ -213,6 +226,17 @@ def analyze_transaction(
                 "merchant_signals"
             ],
 
+        # ML risk intelligence
+        "ml_fraud_probability": ml_result[
+            "ml_fraud_probability"
+        ],
+        "ml_predicted_label": ml_result[
+            "ml_predicted_label"
+        ],
+        "ml_threshold": ml_result[
+            "ml_threshold"
+        ],
+
         # Confidence / uncertainty
         "decision_confidence":
             confidence_result[
@@ -324,9 +348,8 @@ def analyze_transaction(
                 "top_evidence"
             ],
 
-        "explanation_confidence":
-            explanation_result[
-                "explanation_confidence"
+        "risk_evidence_strength": explanation_result[
+            "risk_evidence_strength"
             ],
 
         # Drift monitoring
