@@ -144,3 +144,123 @@ def test_invalid_negative_amount_returns_422():
     )
 
     assert response.status_code == 422
+
+def test_ml_cannot_override_authoritative_policy(monkeypatch):
+    """
+    Safety invariant:
+    ML is advisory only. Even if ML predicts legitimate,
+    deterministic policy must retain the authoritative action.
+    """
+
+    def fake_ml_prediction(transaction):
+        return {
+            "ml_fraud_probability": 0.01,
+            "ml_predicted_label": 0,
+            "ml_threshold": 0.5
+        }
+
+    monkeypatch.setattr(
+        "app.main.predict_ml_label",
+        fake_ml_prediction
+    )
+
+    payload = {
+        "transaction_id": "txn_safety_ml_001",
+        "merchant_id": "merchant_safety",
+        "customer_id": "customer_safety",
+        "amount": 50000,
+        "currency": "INR",
+        "payment_method": "card",
+        "timestamp": "2026-09-03T20:00:00",
+        "country": "IN",
+        "city": "Chennai",
+        "device_id": "device_safety_001",
+        "ip_address": "10.10.10.10",
+        "is_new_device": True,
+        "account_age_days": 2,
+        "transactions_last_1h": 10,
+        "transactions_last_24h": 20,
+        "avg_transaction_amount_30d": 2000,
+        "card_fingerprint": "card_safety_001",
+        "email_hash": "email_safety_001"
+    }
+
+    response = client.post("/risk/analyze", json=payload)
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    # Forced ML opinion says legitimate
+    assert data["ml_predicted_label"] == 0
+    assert data["ml_fraud_probability"] == 0.01
+
+    # But ML must not override the policy gate
+    assert data["authoritative_action"] == "REVIEW"
+    assert data["risk_level"] == "HIGH"
+
+
+def test_sensitive_identifiers_not_exposed_in_response():
+    """
+    Safety invariant:
+    Raw sensitive identifiers must not be returned
+    by the risk-analysis API.
+    """
+
+    sensitive_device = "secret-device-12345"
+    sensitive_ip = "192.168.99.123"
+    sensitive_card = "secret-card-fingerprint-98765"
+    sensitive_email = "secret-email-hash-54321"
+
+    payload = {
+        "transaction_id": "txn_privacy_safety_001",
+        "merchant_id": "merchant_privacy",
+        "customer_id": "customer_privacy",
+        "amount": 12000,
+        "currency": "INR",
+        "payment_method": "card",
+        "timestamp": "2026-09-03T20:30:00",
+        "country": "IN",
+        "city": "Chennai",
+        "device_id": sensitive_device,
+        "ip_address": sensitive_ip,
+        "is_new_device": False,
+        "account_age_days": 500,
+        "transactions_last_1h": 1,
+        "transactions_last_24h": 2,
+        "avg_transaction_amount_30d": 11000,
+        "card_fingerprint": sensitive_card,
+        "email_hash": sensitive_email
+    }
+
+    response = client.post("/risk/analyze", json=payload)
+
+    assert response.status_code == 200
+
+    response_text = response.text
+
+    assert sensitive_device not in response_text
+    assert sensitive_ip not in response_text
+    assert sensitive_card not in response_text
+    assert sensitive_email not in response_text
+
+    data = response.json()
+
+    assert data["privacy_controls"]["raw_card_number_stored"] is False
+    assert data["privacy_controls"]["raw_sensitive_identifiers_logged"] is False
+
+def test_invalid_human_review_outcome_rejected():
+    """
+    Safety invariant:
+    Human-review outcomes must be restricted to the
+    explicitly permitted FRAUD or LEGITIMATE states.
+    """
+
+    payload = {
+        "transaction_id": "txn_invalid_review_001",
+        "review_outcome": "UNKNOWN",
+        "reviewer_note": "Invalid outcome safety test"
+    }
+
+    response = client.post("/feedback/review", json=payload)
+    assert response.status_code == 422
