@@ -16,7 +16,7 @@ from app.policy_engine import resolve_final_action
 from app.counterfactual_engine import run_counterfactual_analysis
 from app.explainability_engine import generate_explanation
 from app.drift_engine import update_drift_monitor
-
+from app.privacy_engine import get_privacy_metadata
 from app.feedback_engine import (
     record_review_feedback,
     get_feedback_summary,
@@ -371,7 +371,9 @@ def analyze_transaction(
         "fraud_spike_detected":
             drift_result[
                 "fraud_spike_detected"
-            ]
+            ],
+
+        "privacy_controls": get_privacy_metadata(),
     }
 
 

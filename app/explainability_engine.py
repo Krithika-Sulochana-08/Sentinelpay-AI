@@ -114,5 +114,5 @@ def generate_explanation(
             "authoritative_action"
         ],
         "top_evidence": top_evidence,
-        "explanation_confidence": confidence
+        "risk_evidence_strength": confidence
     }
