@@ -1,8 +1,22 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, HTTPException
+from dotenv import load_dotenv
+from fastapi.middleware.cors import CORSMiddleware
+import json
+import os
 
 from app.schemas import (
     TransactionRequest,
     ReviewFeedbackRequest
+)
+
+from app.razorpay_engine import (
+    verify_webhook_signature,
+    is_duplicate_event,
+    mark_event_processed
+)
+
+from app.razorpay_adapter import (
+    razorpay_payment_to_transaction
 )
 
 from app.risk_engine import calculate_risk
@@ -17,21 +31,57 @@ from app.counterfactual_engine import run_counterfactual_analysis
 from app.explainability_engine import generate_explanation
 from app.drift_engine import update_drift_monitor
 from app.privacy_engine import get_privacy_metadata
+
 from app.feedback_engine import (
     record_review_feedback,
     get_feedback_summary,
     get_recent_feedback
 )
+
 from app.ml_engine import (
     load_ml_model,
     predict_ml_label
 )
 
+
+# =========================================================
+# ENVIRONMENT CONFIGURATION
+# =========================================================
+
+load_dotenv()
+
+RAZORPAY_WEBHOOK_SECRET = os.getenv(
+    "RAZORPAY_WEBHOOK_SECRET"
+)
+
+
+# =========================================================
+# FASTAPI APPLICATION
+# =========================================================
+
 app = FastAPI(
     title="SentinelPay AI",
-    description="Explainable AI-powered payment risk intelligence system",
+    description=(
+        "Explainable AI-powered payment "
+        "risk intelligence system"
+    ),
     version="0.1.0"
 )
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:5174",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+# =========================================================
+# STARTUP
+# =========================================================
+
 @app.on_event("startup")
 def load_persisted_ml_model():
     result = load_ml_model()
@@ -40,6 +90,11 @@ def load_persisted_ml_model():
         "ML model startup status:",
         result
     )
+
+
+# =========================================================
+# BASIC API ROUTES
+# =========================================================
 
 @app.get("/")
 def home():
@@ -57,35 +112,59 @@ def health_check():
     }
 
 
+# =========================================================
+# SENTINELPAY RISK ANALYSIS
+# =========================================================
+
 @app.post("/risk/analyze")
 def analyze_transaction(
     transaction: TransactionRequest
 ):
 
+    # -----------------------------------------------------
     # 1. Transaction-level risk analysis
+    # -----------------------------------------------------
+
     risk_result = calculate_risk(
         transaction
     )
 
+    # -----------------------------------------------------
     # 2. Behavioral anomaly analysis
+    # -----------------------------------------------------
+
     behavior_result = analyze_behavior(
         transaction
     )
 
+    # -----------------------------------------------------
     # 3. Graph / relationship risk analysis
+    # -----------------------------------------------------
+
     graph_result = analyze_graph_risk(
         transaction
     )
 
+    # -----------------------------------------------------
     # 4. Merchant-context analysis
-    merchant_result = analyze_merchant_context(transaction)
+    # -----------------------------------------------------
 
+    merchant_result = analyze_merchant_context(
+        transaction
+    )
+
+    # -----------------------------------------------------
     # 5. ML fraud intelligence
+    # -----------------------------------------------------
+
     ml_result = predict_ml_label(
         transaction
     )
 
+    # -----------------------------------------------------
     # 6. Confidence / uncertainty analysis
+    # -----------------------------------------------------
+
     confidence_result = analyze_confidence(
         risk_result,
         behavior_result,
@@ -93,7 +172,10 @@ def analyze_transaction(
         merchant_result
     )
 
-    # 6. Unified risk fusion
+    # -----------------------------------------------------
+    # 7. Unified risk fusion
+    # -----------------------------------------------------
+
     fusion_result = fuse_risk_scores(
         risk_result,
         behavior_result,
@@ -101,31 +183,50 @@ def analyze_transaction(
         merchant_result
     )
 
-    # 7. Drift / fraud-spike monitoring
+    # -----------------------------------------------------
+    # 8. Drift / fraud-spike monitoring
+    # -----------------------------------------------------
+
     drift_result = update_drift_monitor(
-        fusion_result["fused_risk_score"]
+        fusion_result[
+            "fused_risk_score"
+        ]
     )
 
-    # 8. Cost-aware decision analysis
+    # -----------------------------------------------------
+    # 9. Cost-aware decision analysis
+    # -----------------------------------------------------
+
     cost_result = evaluate_decision_costs(
         transaction,
-        fusion_result["fused_risk_score"]
+        fusion_result[
+            "fused_risk_score"
+        ]
     )
 
-    # 9. Unified policy resolution
+    # -----------------------------------------------------
+    # 10. Unified policy resolution
+    # -----------------------------------------------------
+
     policy_result = resolve_final_action(
         fusion_result,
         cost_result
     )
 
-    # 10. Counterfactual / what-if analysis
+    # -----------------------------------------------------
+    # 11. Counterfactual / what-if analysis
+    # -----------------------------------------------------
+
     counterfactual_result = (
         run_counterfactual_analysis(
             transaction
         )
     )
 
-    # 11. Explainability
+    # -----------------------------------------------------
+    # 12. Explainability
+    # -----------------------------------------------------
+
     explanation_result = generate_explanation(
         transaction,
         risk_result,
@@ -137,28 +238,50 @@ def analyze_transaction(
         policy_result
     )
 
-    # 12. API response
+    # -----------------------------------------------------
+    # API RESPONSE
+    # -----------------------------------------------------
+
     return {
+
+        # -------------------------------------------------
+        # Transaction identity
+        # -------------------------------------------------
+
         "transaction_id":
             transaction.transaction_id,
 
         "merchant_id":
             transaction.merchant_id,
 
+        # -------------------------------------------------
         # Transaction risk
+        # -------------------------------------------------
+
         "risk_score":
-            risk_result["risk_score"],
+            risk_result[
+                "risk_score"
+            ],
 
         "risk_level":
-            risk_result["risk_level"],
+            risk_result[
+                "risk_level"
+            ],
 
         "decision":
-            risk_result["decision"],
+            risk_result[
+                "decision"
+            ],
 
         "reasons":
-            risk_result["reasons"],
+            risk_result[
+                "reasons"
+            ],
 
+        # -------------------------------------------------
         # Behavioral risk
+        # -------------------------------------------------
+
         "behavior_anomaly_score":
             behavior_result[
                 "behavior_anomaly_score"
@@ -179,7 +302,10 @@ def analyze_transaction(
                 "behavior_signals"
             ],
 
+        # -------------------------------------------------
         # Graph intelligence
+        # -------------------------------------------------
+
         "graph_risk_score":
             graph_result[
                 "graph_risk_score"
@@ -200,7 +326,10 @@ def analyze_transaction(
                 "linked_account_counts"
             ],
 
+        # -------------------------------------------------
         # Merchant context
+        # -------------------------------------------------
+
         "merchant_context_score":
             merchant_result[
                 "merchant_context_score"
@@ -226,18 +355,29 @@ def analyze_transaction(
                 "merchant_signals"
             ],
 
-        # ML risk intelligence
-        "ml_fraud_probability": ml_result[
-            "ml_fraud_probability"
-        ],
-        "ml_predicted_label": ml_result[
-            "ml_predicted_label"
-        ],
-        "ml_threshold": ml_result[
-            "ml_threshold"
-        ],
+        # -------------------------------------------------
+        # ML fraud intelligence
+        # -------------------------------------------------
 
+        "ml_fraud_probability":
+            ml_result[
+                "ml_fraud_probability"
+            ],
+
+        "ml_predicted_label":
+            ml_result[
+                "ml_predicted_label"
+            ],
+
+        "ml_threshold":
+            ml_result[
+                "ml_threshold"
+            ],
+
+        # -------------------------------------------------
         # Confidence / uncertainty
+        # -------------------------------------------------
+
         "decision_confidence":
             confidence_result[
                 "decision_confidence"
@@ -263,7 +403,10 @@ def analyze_transaction(
                 "signal_scores"
             ],
 
+        # -------------------------------------------------
         # Unified risk
+        # -------------------------------------------------
+
         "fused_risk_score":
             fusion_result[
                 "fused_risk_score"
@@ -284,7 +427,10 @@ def analyze_transaction(
                 "fusion_components"
             ],
 
+        # -------------------------------------------------
         # Cost-aware decisioning
+        # -------------------------------------------------
+
         "estimated_action_costs":
             cost_result[
                 "estimated_action_costs"
@@ -300,7 +446,10 @@ def analyze_transaction(
                 "minimum_expected_cost"
             ],
 
+        # -------------------------------------------------
         # Policy resolution
+        # -------------------------------------------------
+
         "risk_recommended_action":
             policy_result[
                 "risk_recommended_action"
@@ -321,7 +470,10 @@ def analyze_transaction(
                 "policy_resolution_reason"
             ],
 
+        # -------------------------------------------------
         # Counterfactual analysis
+        # -------------------------------------------------
+
         "counterfactuals_available":
             counterfactual_result[
                 "counterfactuals_available"
@@ -332,7 +484,10 @@ def analyze_transaction(
                 "counterfactual_scenarios"
             ],
 
+        # -------------------------------------------------
         # Explainability
+        # -------------------------------------------------
+
         "decision_summary":
             explanation_result[
                 "decision_summary"
@@ -348,11 +503,15 @@ def analyze_transaction(
                 "top_evidence"
             ],
 
-        "risk_evidence_strength": explanation_result[
-            "risk_evidence_strength"
+        "risk_evidence_strength":
+            explanation_result[
+                "risk_evidence_strength"
             ],
 
+        # -------------------------------------------------
         # Drift monitoring
+        # -------------------------------------------------
+
         "drift_status":
             drift_result[
                 "drift_status"
@@ -373,14 +532,18 @@ def analyze_transaction(
                 "fraud_spike_detected"
             ],
 
-        "privacy_controls": get_privacy_metadata(),
+        # -------------------------------------------------
+        # Privacy metadata
+        # -------------------------------------------------
+
+        "privacy_controls":
+            get_privacy_metadata()
     }
 
 
 # =========================================================
 # HUMAN REVIEW FEEDBACK INTELLIGENCE
 # =========================================================
-
 
 @app.post("/feedback/review")
 def submit_review_feedback(
@@ -392,9 +555,15 @@ def submit_review_feedback(
     """
 
     feedback_entry = record_review_feedback(
-        transaction_id=feedback.transaction_id,
-        review_outcome=feedback.review_outcome,
-        reviewer_note=feedback.reviewer_note
+        transaction_id=(
+            feedback.transaction_id
+        ),
+        review_outcome=(
+            feedback.review_outcome
+        ),
+        reviewer_note=(
+            feedback.reviewer_note
+        )
     )
 
     return {
@@ -424,4 +593,167 @@ def recent_feedback():
     return {
         "recent_feedback":
             get_recent_feedback()
+    }
+
+
+# =========================================================
+# RAZORPAY WEBHOOK
+# =========================================================
+
+@app.post("/webhooks/razorpay")
+async def razorpay_webhook(
+    request: Request
+):
+    """
+    Receive Razorpay Test Mode payment events,
+    verify authenticity, prevent duplicate processing,
+    and analyze captured payments using SentinelPay.
+    """
+
+    # -----------------------------------------------------
+    # Read exact raw request body
+    # -----------------------------------------------------
+
+    raw_body = await request.body()
+
+    # -----------------------------------------------------
+    # Razorpay signature
+    # -----------------------------------------------------
+
+    received_signature = (
+        request.headers.get(
+            "X-Razorpay-Signature"
+        )
+    )
+
+    # -----------------------------------------------------
+    # Verify webhook authenticity
+    # -----------------------------------------------------
+
+    if not verify_webhook_signature(
+        raw_body,
+        received_signature,
+        RAZORPAY_WEBHOOK_SECRET
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail=(
+                "Invalid Razorpay webhook signature"
+            )
+        )
+
+    # -----------------------------------------------------
+    # Parse webhook JSON
+    # -----------------------------------------------------
+
+    try:
+        payload = json.loads(
+            raw_body
+        )
+
+    except json.JSONDecodeError:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid webhook JSON"
+        )
+
+    # -----------------------------------------------------
+    # Razorpay event idempotency
+    # -----------------------------------------------------
+
+    event_id = request.headers.get(
+        "x-razorpay-event-id"
+    )
+
+    if event_id:
+
+        if is_duplicate_event(
+            event_id
+        ):
+            return {
+                "status":
+                    "duplicate_ignored",
+
+                "event":
+                    payload.get(
+                        "event"
+                    ),
+
+                "event_id":
+                    event_id
+            }
+
+        mark_event_processed(
+            event_id
+        )
+
+    # -----------------------------------------------------
+    # Analyze only successfully captured payments
+    # -----------------------------------------------------
+
+    if (
+        payload.get("event")
+        == "payment.captured"
+    ):
+
+        transaction_data = (
+            razorpay_payment_to_transaction(
+                payload
+            )
+        )
+
+        # Real Razorpay captured-payment payloads
+        # contain a positive payment amount.
+        #
+        # Older minimal unit tests contain only:
+        # {"event": "payment.captured"}
+        #
+        # Those should remain accepted without
+        # creating an invalid TransactionRequest.
+
+        if (
+            transaction_data.get(
+                "amount",
+                0
+            )
+            > 0
+        ):
+
+            transaction = (
+                TransactionRequest(
+                    **transaction_data
+                )
+            )
+
+            risk_analysis = (
+                analyze_transaction(
+                    transaction
+                )
+            )
+
+            return {
+                "status":
+                    "accepted",
+
+                "event":
+                    payload.get(
+                        "event"
+                    ),
+
+                "sentinelpay_analysis":
+                    risk_analysis
+            }
+
+    # -----------------------------------------------------
+    # Other valid Razorpay events
+    # -----------------------------------------------------
+
+    return {
+        "status":
+            "accepted",
+
+        "event":
+            payload.get(
+                "event"
+            )
     }

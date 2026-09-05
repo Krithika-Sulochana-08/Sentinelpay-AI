@@ -214,5 +214,8 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-# Streamlit
-.streamlit/secrets.toml
+# Frontend build output
+frontend/dist/
+
+# VS Code workspace
+.vscode/
